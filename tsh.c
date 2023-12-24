@@ -57,6 +57,7 @@ struct job_t jobs[MAXJOBS]; /* The job list */
 /* Function prototypes */
 
 /* Here are the functions that you will implement */
+int getRelBgJid(pid_t pid);
 void eval(char *cmdline);
 int builtin_cmd(char **argv);
 void do_bgfg(char **argv);
@@ -153,7 +154,21 @@ int main(int argc, char **argv)
 
     exit(0); /* control never reaches here */
 }
-  
+
+pid_t Fork()
+{
+    pid_t pid = fork();
+    if (pid < 0) unix_error("Fork error");
+    return pid;
+}
+void Sigfillset(sigset_t* p) {int res = sigfillset(p); if (res < 0) unix_error("Sigfillset error");}
+void Sigemptyset(sigset_t* p) {int res = sigemptyset(p); if (res < 0) unix_error("Sigemptyset error");}
+void Sigaddset(sigset_t* p, int nowSig) {int res = sigaddset(p, nowSig); if (res < 0) unix_error("Sigaddset error");}
+void Sigprocmask(int how, sigset_t* nowSet, sigset_t* oldSet) 
+{
+    int res = sigprocmask(how, nowSet, oldSet);
+    if (res < 0 ) unix_error("Sigprocmask Error");
+}
 /* 
  * eval - Evaluate the command line that the user has just typed in
  * 
@@ -173,6 +188,42 @@ void eval(char *cmdline)
                         + !strcmp(argv[0], "fg") * 4;
     if (isBuiltinCmd == 1) {
         exit(0);
+    }
+    if (isBuiltinCmd == 2) {
+        listjobs(jobs);
+    }
+    else if (isBuiltinCmd == 3) {
+    }
+    else if (isBuiltinCmd == 4) {
+    }
+    else {
+        //need to fork
+        pid_t pid;
+        sigset_t mask_all, mask_one, prev_one;
+        Sigfillset(&mask_all);
+        Sigemptyset(&mask_one);
+        Sigaddset(&mask_one, SIGCHLD);
+        Sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
+        if ((pid = Fork()) == 0) {
+            //son
+            Sigprocmask(SIG_SETMASK, &prev_one, NULL);
+            setpgid(0, 0);
+            //printf("%s\n", *(argv+1));
+            execve(argv[0], argv, environ);
+        }
+        else {
+            //parent
+                Sigprocmask(SIG_BLOCK, &mask_all, NULL);
+                addjob(jobs, pid, isBG?BG:FG, cmdline);
+                Sigprocmask(SIG_SETMASK, &prev_one, NULL);
+            if (!isBG) {
+                int status;
+                if (waitpid(pid, &status, 0) < 0) unix_error("waitpid error.");
+            }
+            else {
+                printf("[%d] (%d) %s", getRelBgJid(pid), pid, cmdline);         //my own creation
+            }
+        }
     }
     return;
 }
@@ -425,6 +476,16 @@ int pid2jid(pid_t pid)
     return 0;
 }
 
+int getRelBgJid(pid_t pid)
+{
+    int cnt = 0;
+    if (pid < 1) return 0;
+    for (int i = 0; i < MAXJOBS; i++) {
+        if (jobs[i].state == BG) cnt++;
+        if (jobs[i].pid == pid) return cnt;
+    }
+    return 0;
+}
 /* listjobs - Print the job list */
 void listjobs(struct job_t *jobs) 
 {
