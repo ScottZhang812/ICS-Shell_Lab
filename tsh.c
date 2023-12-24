@@ -44,7 +44,7 @@ int verbose = 0;            /* if true, print additional output */
 int nextjid = 1;            /* next job ID to allocate */
 char sbuf[MAXLINE];         /* for composing sprintf messages */
 
-struct job_t {              /* The job struct */    //actually the sole process struct
+struct job_t {              /* The job struct */    //in this lab it's special, actually just the sole process struct
     pid_t pid;              /* job PID */
     int jid;                /* job ID [1, 2, ...] */
     int state;              /* UNDEF, BG, FG, or ST */
@@ -167,6 +167,13 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+    char* argv[MAXARGS];
+    int isBG = parseline(cmdline, argv);
+    int isBuiltinCmd = !strcmp(argv[0], "quit") + !strcmp(argv[0], "jobs") * 2 + !strcmp(argv[0], "bg") * 3 
+                        + !strcmp(argv[0], "fg") * 4;
+    if (isBuiltinCmd == 1) {
+        exit(0);
+    }
     return;
 }
 
@@ -324,6 +331,7 @@ int maxjid(struct job_t *jobs)
 }
 
 /* addjob - Add a job to the job list */
+// returns: 1 if succeed, 0 if fail
 int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline) 
 {
     int i;
@@ -350,6 +358,7 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
 }
 
 /* deletejob - Delete a job whose PID=pid from the job list */
+// returns: 1 if succeed, 0 if fail
 int deletejob(struct job_t *jobs, pid_t pid) 
 {
     int i;
